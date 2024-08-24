@@ -1,7 +1,8 @@
 # /// script
-# requires-python = ">=3.11"
+# requires-python = ">=3.12"
 # dependencies = [
 #     "requests<3",
+#     "geoplot==0.5.1",
 # ]
 # ///
 import json
@@ -12,8 +13,13 @@ from os import getenv
 from pathlib import Path
 from sys import argv
 from tempfile import NamedTemporaryFile
-from typing import IO, Generator, Iterable, NamedTuple, Optional
+from typing import (IO, BinaryIO, Generator, Iterable, NamedTuple, Optional,
+                    TextIO)
 
+import geopandas as gpd
+import geoplot as gplt
+import geoplot.crs as gcrs
+import matplotlib.pyplot as plt
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -123,6 +129,18 @@ def convert_response_to_geojson(parsed_xml: ET.Element) -> dict:
     return geojson
 
 
+def generate_plot(geojson_fp: TextIO, output_fp: BinaryIO, title: str) -> None:
+    print("Generating plot...")
+    gdf = gpd.read_file(geojson_fp)
+    ax = gplt.webmap(gdf, projection=gcrs.WebMercator())
+    ax.set_title(title, fontsize=16)
+    attribution_text = "Map © OpenStreetMap contributors"
+    plt.figtext(0.5, 0.08, attribution_text, ha="center", fontsize=8)
+    gplt.polyplot(gdf, ax=ax)
+    plt.savefig(output_fp, dpi=300, bbox_inches="tight", format="png")
+    print("Finished generating plot.")
+
+
 def _get_wfs_params(layer: str, lower_bound: str, upper_bound: str) -> dict[str, str]:
     return dict(
         SERVICE="WFS",
@@ -223,11 +241,20 @@ def main(date_var: date, layer: str, webhook_url: str, state_file: Path) -> None
             new_date=new_date_str,
         )
         geojson = convert_response_to_geojson(parsed_xml=result)
-        with NamedTemporaryFile("r+") as fp:
-            json.dump(geojson, fp)
-            fp.seek(0)  # move pointer back to beginning of file so we can read what we just wrote
+        with NamedTemporaryFile("r+") as geojson_fp, NamedTemporaryFile("rb+") as plot_fp:
+            json.dump(geojson, geojson_fp)
+            geojson_fp.seek(0)  # move pointer back to beginning of file so we can read what we just wrote
+            generate_plot(geojson_fp=geojson_fp, output_fp=plot_fp, title=f"Ortofotomapy dodane między {date_str} a {new_date_str}")
+            plot_fp.seek(0)
             print(f"Posting message to discord: {message}")
-            post_to_discord(webhook_url=webhook_url, message=message, files={"file": (f"zasiegi_{date_str}_{new_date_str}.geojson", fp, "application/geo+json")})
+            post_to_discord(
+                webhook_url=webhook_url,
+                message=message,
+                files={
+                    "file": (f"zasiegi_{date_str}_{new_date_str}.geojson", geojson_fp, "application/geo+json"),
+                    "image": (f"zasiegi_{date_str}_{new_date_str}.png", plot_fp, "image/png"),
+                },
+            )
         print(f"Updating {state_file.name} file with value: {new_date_str}")
         state_file.write_text(new_date_str, encoding="utf-8")
     else:
