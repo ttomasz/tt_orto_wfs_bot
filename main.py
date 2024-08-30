@@ -3,9 +3,9 @@
 # dependencies = [
 #     "requests<3",
 #     "geoplot==0.5.1",
+#     "geojson-pydantic==1.1.1",
 # ]
 # ///
-import json
 import urllib.parse
 import xml.etree.ElementTree as ET
 from datetime import date, timedelta
@@ -21,6 +21,7 @@ import geoplot as gplt
 import geoplot.crs as gcrs
 import matplotlib.pyplot as plt
 import requests
+from geojson_pydantic import Feature, FeatureCollection, Polygon
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -47,33 +48,20 @@ class Envelope(NamedTuple):
     ymax: float
 
 
-def _feature(e: Envelope, properties: Optional[dict]) -> dict:
-    return {
-        "type": "Feature",
-        "geometry": {
-            "type": "Polygon",
-            "coordinates": [
-                [
-                    (e.xmin, e.ymin),
-                    (e.xmin, e.ymax),
-                    (e.xmax, e.ymax),
-                    (e.xmax, e.ymin),
-                    (e.xmin, e.ymin),
-                ],
-            ],
-        },
-        "properties": properties or dict(),
-    }
+def _feature(e: Envelope, properties: Optional[dict]) -> Feature:
+    return Feature(
+        type="Feature",
+        geometry=Polygon.from_bounds(e.xmin, e.ymin, e.xmax, e.ymax),
+        properties=properties or dict(),
+    )
 
 
-def _feature_collection(features: Iterable[dict], bbox: Optional[Envelope] = None) -> dict:
-    d = {
-        "type": "FeatureCollection",
-        "features": [f for f in features],
-    }
-    if bbox is not None:
-        d["bbox"] = (bbox.xmin, bbox.ymin, bbox.xmax, bbox.ymax)
-    return d
+def _feature_collection(features: Iterable[Feature], bbox: Optional[Envelope] = None) -> FeatureCollection:
+    return FeatureCollection(
+        type="FeatureCollection",
+        bbox=bbox,
+        features=[f for f in features],
+    )
 
 
 def _get_envelope_from_element(el: ET.Element) -> Envelope:
@@ -108,7 +96,7 @@ def _get_chosen_attributes_from_element(el: ET.Element) -> dict:
     }
 
 
-def _get_features_from_response(el: ET.Element) -> Generator[dict, None, None]:
+def _get_features_from_response(el: ET.Element) -> Generator[Feature, None, None]:
     members = el.findall(".//{http://www.opengis.net/wfs/2.0}member")
     for member in members:
         envelope = _get_envelope_from_element(el=member)
@@ -116,7 +104,7 @@ def _get_features_from_response(el: ET.Element) -> Generator[dict, None, None]:
         yield _feature(e=envelope, properties=attributes)
 
 
-def convert_response_to_geojson(parsed_xml: ET.Element) -> dict:
+def convert_response_to_geojson(parsed_xml: ET.Element) -> FeatureCollection:
     print("Converting response to geojson...")
     bounded_by = parsed_xml.find(".//{http://www.opengis.net/wfs/2.0}boundedBy")
     assert bounded_by is not None
@@ -242,9 +230,13 @@ def main(date_var: date, layer: str, webhook_url: str, state_file: Path) -> None
         )
         geojson = convert_response_to_geojson(parsed_xml=result)
         with NamedTemporaryFile("r+") as geojson_fp, NamedTemporaryFile("rb+") as plot_fp:
-            json.dump(geojson, geojson_fp)
+            geojson_fp.write(geojson.model_dump_json())
             geojson_fp.seek(0)  # move pointer back to beginning of file so we can read what we just wrote
-            generate_plot(geojson_fp=geojson_fp, output_fp=plot_fp, title=f"Ortofotomapy dodane między {date_str} a {new_date_str}")
+            generate_plot(
+                geojson_fp=geojson_fp,  # type: ignore
+                output_fp=plot_fp,  # type: ignore
+                title=f"Ortofotomapy dodane między {date_str} a {new_date_str}",
+            )
             plot_fp.seek(0)
             print(f"Posting message to discord: {message}")
             post_to_discord(
