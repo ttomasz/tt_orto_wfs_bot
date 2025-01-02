@@ -13,8 +13,7 @@ from os import getenv
 from pathlib import Path
 from sys import argv
 from tempfile import NamedTemporaryFile
-from typing import (IO, BinaryIO, Generator, Iterable, NamedTuple, Optional,
-                    TextIO)
+from typing import IO, BinaryIO, Generator, Iterable, NamedTuple, Optional, TextIO
 
 import geopandas as gpd
 import geoplot as gplt
@@ -28,7 +27,7 @@ from urllib3.util.retry import Retry
 THIS_FILE = Path(__file__)
 THIS_DIR = THIS_FILE.parent
 BASE_URL = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WFS/Skorowidze"
-LAYER_NAME_TEMPLATE = "SkorowidzOrtofomapy{year}"
+LAYER_NAME_TEMPLATE = "gugik:SkorowidzOrtofomapy{year}"
 MESSAGE_TEMPLATE = """
 Wygląda na to, że dodano nowe arkusze ortofotomapy do pobrania z Geoportalu z datami dodania do rejestru między: {old_date} i {new_date}.
 
@@ -169,6 +168,16 @@ def make_request(url: str, params: dict, retries: int = 3, timeout: timedelta = 
     return parsed_xml
 
 
+def get_wfs_layers() -> set[str]:
+    xml_response = make_request(url=BASE_URL, params={"SERVICE": "WFS", "REQUEST": "GetCapabilities"})
+    layer_names = [
+        el.text
+        for el in xml_response.findall(".//{http://www.opengis.net/wfs/2.0}FeatureType/{http://www.opengis.net/wfs/2.0}Name")
+        if el is not None and el.text
+    ]
+    return set(layer_names)
+
+
 def _get_number_matched_from_response(el: ET.Element) -> int | None:
     if el.tag != "{http://www.opengis.net/wfs/2.0}FeatureCollection":
         raise ValueError(f"Expected tag 'wfs:FeatureCollection' got: {el.tag}")
@@ -281,16 +290,25 @@ if __name__ == "__main__":
     if not webhook_url:
         raise Exception("Missing env variable: WEBHOOK_URL")
 
-    print("Processing previous year layer")
-    previous_year_layer = LAYER_NAME_TEMPLATE.format(year=previous_year)
-    previous_year_file = THIS_DIR / f"last_date_{previous_year}.txt"
-    previous_year_date_used = parse_date_from(path=previous_year_file) or yesterday
-    main(date_var=previous_year_date_used, layer=previous_year_layer, webhook_url=webhook_url, state_file=previous_year_file)
+    available_layers = get_wfs_layers()
+    print(f"Available layers: {available_layers}")
 
-    print("Processing current year layer")
+    previous_year_layer = LAYER_NAME_TEMPLATE.format(year=previous_year)
+    if previous_year_layer in available_layers:
+        print(f"Processing previous year layer: {previous_year_layer}")
+        previous_year_file = THIS_DIR / f"last_date_{previous_year}.txt"
+        previous_year_date_used = parse_date_from(path=previous_year_file) or yesterday
+        main(date_var=previous_year_date_used, layer=previous_year_layer, webhook_url=webhook_url, state_file=previous_year_file)
+    else:
+        print("No previous year layer found")
+
     current_year_layer = LAYER_NAME_TEMPLATE.format(year=current_year)
-    current_year_file = THIS_DIR / f"last_date_{current_year}.txt"
-    current_year_date_used = parse_date_from(path=current_year_file) or yesterday
-    main(date_var=current_year_date_used, layer=current_year_layer, webhook_url=webhook_url, state_file=current_year_file)
+    if current_year_layer in available_layers:
+        print(f"Processing current year layer: {current_year_layer}")
+        current_year_file = THIS_DIR / f"last_date_{current_year}.txt"
+        current_year_date_used = parse_date_from(path=current_year_file) or yesterday
+        main(date_var=current_year_date_used, layer=current_year_layer, webhook_url=webhook_url, state_file=current_year_file)
+    else:
+        print("No current year layer found")
 
     print("Done")
