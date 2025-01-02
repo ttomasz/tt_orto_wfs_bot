@@ -3,7 +3,7 @@
 # dependencies = [
 #     "requests<3",
 #     "geoplot==0.5.1",
-#     "geojson-pydantic==1.1.1",
+#     "geojson-pydantic==1.2.0",
 # ]
 # ///
 import urllib.parse
