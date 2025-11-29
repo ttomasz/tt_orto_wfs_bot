@@ -271,11 +271,11 @@ def parse_date_from(path: Path) -> date | None:
 
 
 if __name__ == "__main__":
-    yesterday = date.today() - timedelta(days=1)
+    first_day_of_year = date.today().replace(month=1, day=1)
     if len(argv) == 2:
         date_used = date.fromisoformat(argv[1])
     else:
-        date_used = yesterday
+        date_used = first_day_of_year
     current_year = date_used.year
     previous_year = current_year - 1
     print(f"Current year: {current_year}, previous year: {previous_year}.")
@@ -297,7 +297,7 @@ if __name__ == "__main__":
     if previous_year_layer in available_layers:
         print(f"Processing previous year layer: {previous_year_layer}")
         previous_year_file = THIS_DIR / f"last_date_{previous_year}.txt"
-        previous_year_date_used = parse_date_from(path=previous_year_file) or yesterday
+        previous_year_date_used = parse_date_from(path=previous_year_file) or date(previous_year, 1, 1)
         main(date_var=previous_year_date_used, layer=previous_year_layer, webhook_url=webhook_url, state_file=previous_year_file)
     else:
         print("No previous year layer found")
@@ -306,7 +306,7 @@ if __name__ == "__main__":
     if current_year_layer in available_layers:
         print(f"Processing current year layer: {current_year_layer}")
         current_year_file = THIS_DIR / f"last_date_{current_year}.txt"
-        current_year_date_used = parse_date_from(path=current_year_file) or yesterday
+        current_year_date_used = parse_date_from(path=current_year_file) or first_day_of_year
         main(date_var=current_year_date_used, layer=current_year_layer, webhook_url=webhook_url, state_file=current_year_file)
     else:
         print("No current year layer found")
