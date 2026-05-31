@@ -5,19 +5,16 @@ on:
   - cron: "42 3 * * *"
 
 jobs:
-  build:
+  run-script:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
+    - name: Install uv
+      uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
       with:
-        python-version: "3.12"
-
-    - name: Set up uv
-      # Install a specific uv version using the installer
-      run: curl -LsSf https://astral.sh/uv/0.9.13/install.sh | sh
+        # Install a specific version of uv.
+        version: "0.11.17"
 
     - name: execute py script
       env:
