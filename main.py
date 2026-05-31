@@ -13,7 +13,7 @@ from os import getenv
 from pathlib import Path
 from sys import argv
 from tempfile import NamedTemporaryFile
-from typing import IO, BinaryIO, Generator, Iterable, NamedTuple, Optional, TextIO
+from typing import BinaryIO, Generator, Iterable, NamedTuple, Optional, TextIO
 
 import geopandas as gpd
 import geoplot as gplt
@@ -200,7 +200,7 @@ def _get_max_date_from_response(el: ET.Element) -> str:
     return max(get_dates())
 
 
-def post_to_discord(webhook_url: str, message: str, files: Optional[dict[str, tuple[str, IO, str]]] = None) -> None:
+def post_to_discord(webhook_url: str, message: str, files: Optional[dict] = None) -> None:
     if len(message) > 2000:
         print("Message length over 2000. Truncating...")
         message = message[:2000]
@@ -246,13 +246,14 @@ def main(date_var: date, layer: str, webhook_url: str, state_file: Path) -> None
                 output_fp=plot_fp,  # type: ignore
                 title=f"Ortofotomapy dodane między {date_str} a {new_date_str}",
             )
+            geojson_fp.seek(0)
             plot_fp.seek(0)
             print(f"Posting message to discord: {message}")
             post_to_discord(
                 webhook_url=webhook_url,
                 message=message,
                 files={
-                    "file": (f"zasiegi_{date_str}_{new_date_str}.geojson", geojson_fp, "application/geo+json"),
+                    "file": (f"zasiegi_{date_str}_{new_date_str}.geojson", geojson_fp.read().encode("utf-8"), "application/geo+json"),
                     "image": (f"zasiegi_{date_str}_{new_date_str}.png", plot_fp, "image/png"),
                 },
             )
