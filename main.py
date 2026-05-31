@@ -1,9 +1,11 @@
 # /// script
-# requires-python = ">=3.12"
+# requires-python = ">=3.14"
 # dependencies = [
-#     "requests<3",
+#     "requests>=2.34,<3",
+#     "geopandas>=1.1,<2",
 #     "geoplot==0.5.1",
-#     "geojson-pydantic==1.2.0",
+#     "geojson-pydantic>=2.0,<3",
+#     "matplotlib>=3.10,<4",
 # ]
 # ///
 import urllib.parse
