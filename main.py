@@ -149,13 +149,15 @@ def _get_wfs_params(layer: str, lower_bound: str, upper_bound: str) -> dict[str,
     )
 
 
-def make_request(url: str, params: dict, retries: int = 3, timeout: timedelta = timedelta(minutes=5)) -> ET.Element:
+def make_request(
+    url: str, params: dict, retries: int = 3, timeout: timedelta = timedelta(minutes=5)
+) -> ET.Element:
     # Configure retries
     retry_strategy = Retry(
         total=retries,
         status_forcelist=[429, 500, 502, 503, 504],
         allowed_methods=["GET"],
-        backoff_factor=1  # wait time between retries: 2nd try waits 1s, 3rd waits 2s, etc.
+        backoff_factor=1,  # wait time between retries: 2nd try waits 1s, 3rd waits 2s, etc.
     )
     adapter = HTTPAdapter(max_retries=retry_strategy)
     session = requests.Session()
@@ -164,7 +166,7 @@ def make_request(url: str, params: dict, retries: int = 3, timeout: timedelta = 
 
     print(f"Making request to: {url} with params: {params}...")
     response = session.get(url, params=params, timeout=timeout.total_seconds())
-    print("Received response.")    
+    print("Received response.")
     response.raise_for_status()
     parsed_xml = ET.fromstring(response.content)
     return parsed_xml
@@ -174,7 +176,9 @@ def get_wfs_layers() -> set[str]:
     xml_response = make_request(url=BASE_URL, params={"SERVICE": "WFS", "REQUEST": "GetCapabilities"})
     layer_names = [
         el.text
-        for el in xml_response.findall(".//{http://www.opengis.net/wfs/2.0}FeatureType/{http://www.opengis.net/wfs/2.0}Name")
+        for el in xml_response.findall(
+            ".//{http://www.opengis.net/wfs/2.0}FeatureType/{http://www.opengis.net/wfs/2.0}Name"
+        )
         if el is not None and el.text
     ]
     return set(layer_names)
@@ -199,6 +203,7 @@ def _get_max_date_from_response(el: ET.Element) -> str:
             assert tp is not None
             assert tp.text is not None
             yield tp.text
+
     return max(get_dates())
 
 
@@ -255,7 +260,11 @@ def main(date_var: date, layer: str, webhook_url: str, state_file: Path) -> None
                 webhook_url=webhook_url,
                 message=message,
                 files={
-                    "file": (f"zasiegi_{date_str}_{new_date_str}.geojson", geojson_fp.read().encode("utf-8"), "application/geo+json"),
+                    "file": (
+                        f"zasiegi_{date_str}_{new_date_str}.geojson",
+                        geojson_fp.read().encode("utf-8"),
+                        "application/geo+json",
+                    ),
                     "image": (f"zasiegi_{date_str}_{new_date_str}.png", plot_fp, "image/png"),
                 },
             )
@@ -285,6 +294,7 @@ if __name__ == "__main__":
 
     try:
         import dotenv
+
         print("Trying to load .env file")
         dotenv.load_dotenv()
     except ImportError:
@@ -301,7 +311,12 @@ if __name__ == "__main__":
         print(f"Processing previous year layer: {previous_year_layer}")
         previous_year_file = THIS_DIR / f"last_date_{previous_year}.txt"
         previous_year_date_used = parse_date_from(path=previous_year_file) or date(previous_year, 1, 1)
-        main(date_var=previous_year_date_used, layer=previous_year_layer, webhook_url=webhook_url, state_file=previous_year_file)
+        main(
+            date_var=previous_year_date_used,
+            layer=previous_year_layer,
+            webhook_url=webhook_url,
+            state_file=previous_year_file,
+        )
     else:
         print("No previous year layer found")
 
@@ -310,7 +325,12 @@ if __name__ == "__main__":
         print(f"Processing current year layer: {current_year_layer}")
         current_year_file = THIS_DIR / f"last_date_{current_year}.txt"
         current_year_date_used = parse_date_from(path=current_year_file) or first_day_of_year
-        main(date_var=current_year_date_used, layer=current_year_layer, webhook_url=webhook_url, state_file=current_year_file)
+        main(
+            date_var=current_year_date_used,
+            layer=current_year_layer,
+            webhook_url=webhook_url,
+            state_file=current_year_file,
+        )
     else:
         print("No current year layer found")
 
