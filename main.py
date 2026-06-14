@@ -265,7 +265,7 @@ def main(date_var: date, layer: str, webhook_url: str, state_file: Path) -> None
                         geojson_fp.read().encode("utf-8"),
                         "application/geo+json",
                     ),
-                    "image": (f"zasiegi_{date_str}_{new_date_str}.png", plot_fp, "image/png"),
+                    "image": (f"zasiegi_{date_str}_{new_date_str}.png", plot_fp.read(), "image/png"),
                 },
             )
         print(f"Updating {state_file.name} file with value: {new_date_str}")
