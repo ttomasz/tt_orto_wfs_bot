@@ -4,6 +4,7 @@
 #     "requests>=2.34,<3",
 #     "geopandas>=1.1,<2",
 #     "geoplot==0.5.1",
+#     "contextily>=1.6,<2",
 #     "geojson-pydantic>=2.0,<3",
 #     "matplotlib>=3.10,<4",
 # ]
@@ -17,6 +18,7 @@ from sys import argv
 from tempfile import NamedTemporaryFile
 from typing import BinaryIO, Generator, Iterable, NamedTuple, Optional, TextIO
 
+import contextily
 import geopandas as gpd
 import geoplot as gplt
 import geoplot.crs as gcrs
@@ -30,6 +32,9 @@ THIS_FILE = Path(__file__)
 THIS_DIR = THIS_FILE.parent
 BASE_URL = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WFS/Skorowidze"
 LAYER_NAME_TEMPLATE = "gugik:SkorowidzOrtofomapy{year}"
+# OSM tile usage policy requires a valid, identifying User-Agent (not the browser-faking
+# or random default some libraries send): https://operations.osmfoundation.org/policies/tiles/
+OSM_TILE_USER_AGENT = "tt_orto_wfs_bot/1.0 (+https://github.com/ttomasz/tt_orto_wfs_bot/)"
 MESSAGE_TEMPLATE = """
 Wygląda na to, że dodano nowe arkusze ortofotomapy do pobrania z Geoportalu z datami dodania do rejestru między: {old_date} i {new_date}.
 
@@ -121,6 +126,10 @@ def convert_response_to_geojson(parsed_xml: ET.Element) -> FeatureCollection:
 def generate_plot(geojson_fp: TextIO, output_fp: BinaryIO, title: str) -> None:
     print("Generating plot...")
     gdf = gpd.read_file(geojson_fp)
+    # geoplot's webmap() fetches tiles via contextily, which defaults to a random,
+    # non-identifying User-Agent that OSM's tile servers block. Override it here since
+    # geoplot doesn't expose a way to pass this through itself.
+    contextily.tile.USER_AGENT = OSM_TILE_USER_AGENT
     ax = gplt.webmap(gdf, projection=gcrs.WebMercator())
     ax.set_title(title, fontsize=16)
     attribution_text = "Map © OpenStreetMap contributors"
